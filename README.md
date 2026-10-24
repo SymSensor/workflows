@@ -38,3 +38,10 @@ jobs:
     phpstan:
         uses: SymSensor/workflows/.github/workflows/phpstan.yaml@v1
 ```
+
+### PHP version of these tools
+
+Both workflows install PHP through `shivammathur/setup-php`, which reads the `.php-version` file of the calling
+repository. Commit a `.php-version` with the lowest supported PHP version of the bundle, so that the result of
+php-cs-fixer and phpstan does not depend on whatever PHP version is the newest. Without that file the newest
+stable PHP is used.
