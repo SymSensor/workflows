@@ -1,7 +1,7 @@
 name: Symfony bundle tests
 
 # Runs the PHPUnit suite against every maintained Symfony version
-# (https://symfony.com/releases.json), each on the oldest and the newest non-EOL PHP version (https://endoflife.date/php) it supports.
+# (https://symfony.com/releases.json), each on every non-EOL PHP version (https://endoflife.date/php) it supports.
 
 on:
     workflow_call:
@@ -45,8 +45,7 @@ jobs:
                     for version in symfony_versions:
                         min_php = key('.'.join(symfony['min_php_requirements'][version].split('.')[:2]))
                         supported = [php for php in php_versions if key(php) >= min_php]
-                        # test the oldest and the newest PHP version Symfony can run on
-                        for php in sorted({supported[0], supported[-1]}, key=key):
+                        for php in supported:
                             include.append({'symfony': version, 'php': php})
                     with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
                         out.write('matrix=' + json.dumps({'include': include}) + '\n')
