@@ -1,7 +1,7 @@
 name: Symfony bundle tests
 
 # Runs the PHPUnit suite against every maintained Symfony version
-# (https://symfony.com/releases.json), each on its minimum PHP version and on PHP 8.4.
+# (https://symfony.com/releases.json), each on the oldest and the newest non-EOL PHP version (https://endoflife.date/php) it supports.
 
 on:
     workflow_call:
@@ -20,20 +20,34 @@ jobs:
                 id: matrix
                 shell: python
                 run: |
-                    import json, os, urllib.request
+                    import datetime, json, os, urllib.request
 
-                    request = urllib.request.Request('https://symfony.com/releases.json', headers={'User-Agent': 'symsensor-ci'})
-                    data = json.load(urllib.request.urlopen(request))
+                    def fetch(url):
+                        request = urllib.request.Request(url, headers={'User-Agent': 'symsensor-ci'})
+                        return json.load(urllib.request.urlopen(request))
+
                     key = lambda v: tuple(int(p) for p in v.split('.'))
-                    latest = key(data['latest_stable_version'])[:2]
+                    today = datetime.date.today().isoformat()
+
+                    symfony = fetch('https://symfony.com/releases.json')
+                    latest = key(symfony['latest_stable_version'])[:2]
                     # skip maintained branches without a stable release yet (e.g. the upcoming minor)
-                    versions = [v for v in data['maintained_versions'] if key(v) <= latest]
+                    symfony_versions = [v for v in symfony['maintained_versions'] if key(v) <= latest]
+
+                    # released PHP versions that have not reached their end of life yet
+                    php_versions = sorted(
+                        (c['cycle'] for c in fetch('https://endoflife.date/api/php.json')
+                         if c['releaseDate'] <= today < c['eol']),
+                        key=key,
+                    )
+
                     include = []
-                    for version in versions:
-                        min_php = '.'.join(data['min_php_requirements'][version].split('.')[:2])
-                        for php in sorted({min_php, '8.4'}, key=key):
-                            if key(php) >= key(min_php):
-                                include.append({'symfony': version, 'php': php})
+                    for version in symfony_versions:
+                        min_php = key('.'.join(symfony['min_php_requirements'][version].split('.')[:2]))
+                        supported = [php for php in php_versions if key(php) >= min_php]
+                        # test the oldest and the newest PHP version Symfony can run on
+                        for php in sorted({supported[0], supported[-1]}, key=key):
+                            include.append({'symfony': version, 'php': php})
                     with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
                         out.write('matrix=' + json.dumps({'include': include}) + '\n')
 

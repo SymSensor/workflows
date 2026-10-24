@@ -5,7 +5,7 @@ Shared reusable GitHub Actions workflows for the SymSensor bundles.
 ## `symfony-bundle.yaml`
 
 Runs PHPUnit against every maintained Symfony version listed in
-<https://symfony.com/releases.json>. Each version is tested on its minimum PHP version and on PHP 8.4.
+<https://symfony.com/releases.json>. Each version is tested on the oldest and the newest non-EOL PHP version it supports (PHP versions from <https://endoflife.date/php>).
 
 Usage in a bundle (`.github/workflows/build.yaml`):
 
