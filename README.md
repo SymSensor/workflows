@@ -22,3 +22,19 @@ jobs:
 ```
 
 `@v1` is a moving tag; pin a commit SHA if you need reproducibility.
+
+## `php-cs-fixer.yaml` and `phpstan.yaml`
+
+Run `php-cs-fixer fix --dry-run` and `phpstan analyse` of the calling repository.
+
+```yaml
+name: phpstan
+
+on:
+    push:
+    pull_request:
+
+jobs:
+    phpstan:
+        uses: SymSensor/workflows/.github/workflows/phpstan.yaml@v1
+```
