@@ -1,0 +1,77 @@
+name: Symfony bundle tests
+
+# Runs the PHPUnit suite against every maintained Symfony version
+# (https://symfony.com/releases.json), each on its minimum PHP version and on PHP 8.4.
+
+on:
+    workflow_call:
+
+permissions:
+    contents: read
+
+jobs:
+    matrix:
+        runs-on: ubuntu-latest
+        name: Resolve maintained Symfony versions
+        outputs:
+            matrix: ${{ steps.matrix.outputs.matrix }}
+        steps:
+            -   name: Build matrix from symfony.com/releases.json
+                id: matrix
+                shell: python
+                run: |
+                    import json, os, urllib.request
+
+                    request = urllib.request.Request('https://symfony.com/releases.json', headers={'User-Agent': 'symsensor-ci'})
+                    data = json.load(urllib.request.urlopen(request))
+                    key = lambda v: tuple(int(p) for p in v.split('.'))
+                    latest = key(data['latest_stable_version'])[:2]
+                    # skip maintained branches without a stable release yet (e.g. the upcoming minor)
+                    versions = [v for v in data['maintained_versions'] if key(v) <= latest]
+                    include = []
+                    for version in versions:
+                        min_php = '.'.join(data['min_php_requirements'][version].split('.')[:2])
+                        for php in sorted({min_php, '8.4'}, key=key):
+                            if key(php) >= key(min_php):
+                                include.append({'symfony': version, 'php': php})
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+                        out.write('matrix=' + json.dumps({'include': include}) + '\n')
+
+    test:
+        needs: matrix
+        runs-on: ubuntu-latest
+        name: PHPUnit Tests (PHP ${{ matrix.php }}, Symfony ${{ matrix.symfony }})
+        strategy:
+            fail-fast: false
+            matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            -   name: Setup PHP
+                uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+                with:
+                    php-version: ${{ matrix.php }}
+                    ini-values: zend.exception_ignore_args=false
+                    tools: flex
+
+            -   name: Get composer cache directory
+                id: composerCache
+                run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+            -   name: Cache dependencies
+                uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+                with:
+                    path: ${{ steps.composerCache.outputs.dir }}
+                    key: ${{ runner.os }}-composer-${{ matrix.symfony }}-${{ hashFiles('**/composer.json') }}
+                    restore-keys: ${{ runner.os }}-composer-${{ matrix.symfony }}-
+
+            -   name: Install dependencies
+                run: |
+                    export SYMFONY_REQUIRE=${{ matrix.symfony }}.*
+                    composer global config --no-plugins allow-plugins.symfony/flex true
+                    composer global require --no-progress --no-scripts --no-plugins symfony/flex
+                    composer update --prefer-dist --no-progress
+
+            -   name: Run tests
+                run: vendor/bin/phpunit
