@@ -94,7 +94,7 @@ jobs:
                     composer update --prefer-dist --no-progress
 
             -   name: Show installed Symfony packages
-                run: composer show 'symfony/*' --format=text | grep -E '^symfony/' | awk '{print $1, $2}'
+                run: composer show 'symfony/*' --format=text | awk '/^symfony\// {print $1, $2}' || true
 
             -   name: Run tests
                 run: vendor/bin/phpunit
