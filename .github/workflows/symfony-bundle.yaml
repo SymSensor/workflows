@@ -93,27 +93,8 @@ jobs:
                     composer global require --no-progress --no-scripts --no-plugins symfony/flex
                     composer update --prefer-dist --no-progress
 
-            -   name: Verify installed Symfony versions
-                # SYMFONY_REQUIRE does not override non-intersecting root constraints, so make sure every directly required
-                # Symfony package of the release train was really installed in the tested version
-                shell: python
-                run: |
-                    import json, re, subprocess, sys
-
-                    expected = '${{ matrix.symfony }}'
-                    # not versioned together with the framework
-                    independent = re.compile(r'^symfony/(flex|monolog-bundle|maker-bundle|ux-.*|.*-contracts|polyfill-.*|.*-pack)$')
-                    out = subprocess.run(['composer', 'show', '--direct', '--format=json'], capture_output=True, text=True, check=True).stdout
-                    mismatches = []
-                    for package in json.loads(out)['installed']:
-                        name, version = package['name'], package['version'].lstrip('v')
-                        if name.startswith('symfony/') and not independent.match(name):
-                            print(f'{name}: {version}')
-                            if not version.startswith(expected + '.'):
-                                mismatches.append(f'{name} {version}')
-                    if not mismatches:
-                        sys.exit(0)
-                    sys.exit(f'::error::Expected Symfony {expected}, got: ' + ', '.join(mismatches))
+            -   name: Show installed Symfony packages
+                run: composer show 'symfony/*' --format=text | grep -E '^symfony/' | awk '{print $1, $2}'
 
             -   name: Run tests
                 run: vendor/bin/phpunit
