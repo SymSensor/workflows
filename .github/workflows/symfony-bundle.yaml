@@ -20,11 +20,18 @@ jobs:
                 id: matrix
                 shell: python
                 run: |
-                    import datetime, json, os, urllib.request
+                    import datetime, json, os, sys, time, urllib.request
 
-                    def fetch(url):
+                    def fetch(url, attempts=3):
                         request = urllib.request.Request(url, headers={'User-Agent': 'symsensor-ci'})
-                        return json.load(urllib.request.urlopen(request))
+                        for attempt in range(1, attempts + 1):
+                            try:
+                                with urllib.request.urlopen(request, timeout=20) as response:
+                                    return json.load(response)
+                            except Exception as error:
+                                if attempt == attempts:
+                                    sys.exit(f'Could not fetch {url} after {attempts} attempts: {error}')
+                                time.sleep(2 ** attempt)
 
                     key = lambda v: tuple(int(p) for p in v.split('.'))
                     today = datetime.date.today().isoformat()
@@ -85,6 +92,16 @@ jobs:
                     composer global config --no-plugins allow-plugins.symfony/flex true
                     composer global require --no-progress --no-scripts --no-plugins symfony/flex
                     composer update --prefer-dist --no-progress
+
+            -   name: Verify installed Symfony version
+                # SYMFONY_REQUIRE does not override non-intersecting root constraints, so make sure the tested version was really installed
+                run: |
+                    installed=$(composer show symfony/framework-bundle --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin)["versions"][0])')
+                    echo "Installed symfony/framework-bundle: $installed"
+                    case "${installed#v}" in
+                        "${{ matrix.symfony }}".*) ;;
+                        *) echo "::error::Expected Symfony ${{ matrix.symfony }}, got $installed"; exit 1 ;;
+                    esac
 
             -   name: Run tests
                 run: vendor/bin/phpunit
